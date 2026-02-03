@@ -1,11 +1,35 @@
 import streamlit as st
 import pandas as pd
 import streamlit.components.v1 as components
+from concurrent.futures import ThreadPoolExecutor
 
-# --- 1. SETTINGS ---
+# --- 1. SETTINGS & PAGE CONFIG ---
 st.set_page_config(page_title="GNC | LeafLink", layout="wide", initial_sidebar_state="expanded")
 
-# --- 2. AUTO-CLOSE SIDEBAR LOGIC ---
+# --- 2. FAST CSS STYLING ---
+st.markdown(f"""
+    <style>
+    [data-testid="stSidebar"] {{ background-color: #0A0A0A !important; border-right: 2px solid #333 !important; }}
+    /* Optimize input rendering */
+    div[data-testid="stTextInput"] > div > div > input,
+    div[data-testid="stSelectbox"] > div > div > div {{
+        background-color: #1E1E1E !important; color: #E0E0E0 !important; border: 1px solid #444 !important; 
+        border-radius: 8px !important; height: 50px !important;
+    }}
+    /* Hardware accelerated buttons */
+    div.stButton > button {{
+        background-color: #2D2D2D !important; color: #FFFFFF !important; border: 1px solid #444 !important;
+        border-radius: 8px !important; height: 50px !important; font-weight: 600 !important; width: 100% !important;
+        transition: transform 0.1s;
+    }}
+    div.stButton > button:active {{ transform: scale(0.98); }}
+    div.stButton > button:hover {{ border-color: #006847 !important; color: #006847 !important; }}
+    div.stButton > button[kind="primary"] {{ background-color: #006847 !important; color: #FFFFFF !important; border: none !important; }}
+    h1, h2, h3 {{ color: #006847 !important; }}
+    </style>
+    """, unsafe_allow_html=True)
+
+# --- 3. AUTO-CLOSE SIDEBAR LOGIC ---
 if 'close_sidebar' not in st.session_state:
     st.session_state.close_sidebar = False
 
@@ -24,75 +48,67 @@ if st.session_state.close_sidebar:
     )
     st.session_state.close_sidebar = False
 
-# --- 3. DATA LOADER (DIRECT PUBLIC READ) ---
-@st.cache_data(ttl=10)
+# --- 4. HIGH-PERFORMANCE DATA LOADER ---
+# Cache for 10 minutes (600s) to prevent lag during navigation. Use "Refresh" button to update.
+@st.cache_data(ttl=600)
 def load_gnc_data():
     try:
-        # 🔗 PUBLIC CSV LINKS (Bypasses Google API Auth)
+        # 🔗 PUBLIC CSV LINKS
         sheet_id = "1FNuWtLD6okE7tOxD3dRcUXVWL9bwwSye1nhGSVDiiTs"
-        
-        # URL for Inventory Tab
         inv_url = f"https://docs.google.com/spreadsheets/d/{sheet_id}/gviz/tq?tqx=out:csv&sheet=Inventory_Drive_Around"
-        
-        # URL for Notes Tab
         notes_url = f"https://docs.google.com/spreadsheets/d/{sheet_id}/gviz/tq?tqx=out:csv&sheet=S1_SalesNotes"
 
-        # 1. READ INVENTORY
-        df = pd.read_csv(inv_url)
-        
-        # Clean Columns
-        df.columns = [str(c).strip().upper() for c in df.columns]
-        
-        # Ensure required columns exist
-        new_cols = ['LOC_SALESNOTE', 'CALIPER', 'SPEC', 'LOC_COMMENTS', 'MATCH_PCT', 'PIC_NOTE', 'PRIME_QTY', 'PHOTO', 'STATUS', 'ITEMCODE']
-        for col in new_cols:
-            if col not in df.columns:
-                df[col] = ""
-        
-        df = df.fillna("").astype(str)
+        # ⚡ PARALLEL DOWNLOADER (Downloads both sheets simultaneously)
+        def fetch_csv(url):
+            try:
+                return pd.read_csv(url)
+            except:
+                return pd.DataFrame()
 
-        # 2. READ NOTES
-        sales_notes_map = {}
-        try:
-            notes_df = pd.read_csv(notes_url)
-            notes_df.columns = [str(c).strip().upper() for c in notes_df.columns]
+        with ThreadPoolExecutor() as executor:
+            future_inv = executor.submit(fetch_csv, inv_url)
+            future_notes = executor.submit(fetch_csv, notes_url)
             
+            df = future_inv.result()
+            notes_df = future_notes.result()
+
+        # 🚀 VECTORIZED CLEANING (Faster than loops)
+        if not df.empty:
+            df.columns = df.columns.str.strip().str.upper()
+            
+            required_cols = ['LOC_SALESNOTE', 'CALIPER', 'SPEC', 'LOC_COMMENTS', 'MATCH_PCT', 'PIC_NOTE', 'PRIME_QTY', 'PHOTO', 'STATUS', 'ITEMCODE', 'SALES_ASSIGNEDTO', 'SEASON', 'COMMONNAME', 'CONTSIZE', 'BLOCKALPHA', 'LOCATIONCODE']
+            
+            # Batch create missing columns
+            missing = [c for c in required_cols if c not in df.columns]
+            if missing:
+                df[pd.Index(missing)] = ""
+            
+            # Fast fillna
+            df = df.fillna("").astype(str)
+
+        # PROCESS NOTES
+        sales_notes_map = {}
+        if not notes_df.empty:
+            notes_df.columns = notes_df.columns.str.strip().str.upper()
             if 'ITEMCODE' in notes_df.columns:
-                note_col = next((c for c in notes_df.columns if 'NOTE' in c), None)
+                # Find the first column with "NOTE" in the name
+                note_cols = [c for c in notes_df.columns if 'NOTE' in c]
+                note_col = note_cols[0] if note_cols else None
+                
                 if not note_col:
+                    # Fallback: take the 2nd column if no "NOTE" column found
                     cols = [c for c in notes_df.columns if c != 'ITEMCODE']
                     if cols: note_col = cols[0]
-                
+
                 if note_col:
+                    # Optimized Groupby
                     sales_notes_map = notes_df.groupby('ITEMCODE')[note_col].apply(lambda x: list(x.dropna().astype(str))).to_dict()
-        except: 
-            pass 
 
         return df, sales_notes_map
 
     except Exception as e:
-        st.error(f"⚠️ Could not read data: {e}")
-        st.info("Make sure the Google Sheet is set to 'Anyone with the link' > 'Editor'")
-        return None, {}
-
-# --- 4. CSS STYLING ---
-st.markdown(f"""
-    <style>
-    [data-testid="stSidebar"] {{ background-color: #0A0A0A !important; border-right: 2px solid #333 !important; }}
-    div[data-testid="stTextInput"] > div > div > input,
-    div[data-testid="stSelectbox"] > div > div > div {{
-        background-color: #1E1E1E !important; color: #E0E0E0 !important; border: 1px solid #444 !important; 
-        border-radius: 8px !important; height: 50px !important;
-    }}
-    div.stButton > button {{
-        background-color: #2D2D2D !important; color: #FFFFFF !important; border: 1px solid #444 !important;
-        border-radius: 8px !important; height: 50px !important; font-weight: 600 !important; width: 100% !important;
-    }}
-    div.stButton > button:hover {{ border-color: #006847 !important; color: #006847 !important; }}
-    div.stButton > button[kind="primary"] {{ background-color: #006847 !important; color: #FFFFFF !important; border: none !important; }}
-    h1, h2, h3 {{ color: #006847 !important; }}
-    </style>
-    """, unsafe_allow_html=True)
+        st.error(f"⚠️ Load Error: {e}")
+        return pd.DataFrame(), {}
 
 # --- 5. STATE MANAGEMENT ---
 if 'page' not in st.session_state: st.session_state.page = 'DRIVEAROUND'
@@ -106,6 +122,14 @@ if 'view_mode' not in st.session_state: st.session_state.view_mode = 'pending'
 # --- 6. SIDEBAR ---
 with st.sidebar:
     st.markdown("<h2 style='text-align:center;'>GNC</h2>", unsafe_allow_html=True)
+    
+    # 🔄 REFRESH BUTTON (Crucial for speed optimization)
+    if st.button("🔄 REFRESH DATA", use_container_width=True):
+        st.cache_data.clear()
+        st.rerun()
+    
+    st.markdown("---")
+    
     nav_pages = ["OVERVIEW", "DRIVEAROUND", "MYTASKS", "SALESTEAM", "INVENTORYTEAM", "SOC", "SALESINVTRACKING", "WEATHER", "CONTACT"]
     for p in nav_pages:
         if st.button(p, key=f"nav_{p}"):
@@ -120,8 +144,8 @@ with st.sidebar:
 df, sales_notes_map = load_gnc_data()
 
 with st.container():
-    if df is None:
-        st.info("Waiting for data...")
+    if df.empty:
+        st.info("Waiting for data... (If stuck, hit Refresh)")
     else:
         # --- SALES TEAM ---
         if st.session_state.page == "SALESTEAM":
@@ -181,7 +205,7 @@ with st.container():
                         if st.button(label, key=f"loc_{row['LOCATIONCODE']}"):
                             st.session_state.sel_loc = row['LOCATIONCODE']; st.session_state.task_step = 'details'; st.rerun()
 
-                # --- DETAIL STACK (Where Saving Happens) ---
+                # --- DETAIL STACK ---
                 elif st.session_state.task_step == 'details':
                     if st.button("⬅️ BACK"): st.session_state.task_step = 'location'; st.rerun()
                     st.markdown(f"### {st.session_state.sel_block} - {st.session_state.sel_loc}")
@@ -195,7 +219,7 @@ with st.container():
                         
                         with st.expander(f"{row.get('COMMONNAME')} | {row.get('CONTSIZE')}", expanded=False):
                             
-                            st.markdown("##### 📸 PHOTO (Disabled in Cloud Mode)")
+                            st.markdown("##### 📸 PHOTO (Disabled in Read-Only Mode)")
                             
                             st.markdown("---")
 
@@ -229,10 +253,8 @@ with st.container():
                             
                             st.markdown("<br>", unsafe_allow_html=True)
                             
-                            # --- MODIFIED: WRITE BUTTON (DISABLED TEMPORARILY) ---
                             if st.button("MARK COMPLETE", key=f"done_{uid}", type="primary"):
-                                st.warning("⚠️ Google has blocked saving for 24h due to quota limits. But the data is loaded!")
-
+                                st.warning("⚠️ Saving disabled for 24h (Google API Quota Limit).")
 
         # --- DRIVE AROUND ---
         elif st.session_state.page == "DRIVEAROUND":
