@@ -33,24 +33,22 @@ if st.session_state.close_sidebar:
 
 # --- 4. HELPER FUNCTIONS ---
 def get_base64_leaf():
-    # Placeholder for cloud: You can replace this with a URL to an image later
     return None 
 
 leaf_b64 = get_base64_leaf()
 
-# --- MODIFIED: CLOUD DATA LOADER (Hardcoded Link to Fix 400 Error) ---
-@st.cache_data(ttl=10) # Checks for updates every 10 seconds
+# --- MODIFIED: CLOUD DATA LOADER (THE FIX IS HERE) ---
+@st.cache_data(ttl=10)
 def load_gnc_data():
     try:
-        # 1. DEFINE THE CLEAN LINK HERE
-        # We hardcode it to avoid Streamlit Secrets parsing errors
+        # 1. HARDCODED LINK (This bypasses the 400 Error)
         sheet_url = "https://docs.google.com/spreadsheets/d/1ffMWw09rxPSZOsn83PUX0uynqdX9xANUlaMk2TIvbbs/edit"
 
         # 2. Connect
         conn = st.connection("gsheets", type=GSheetsConnection)
         
-        # 3. READ MAIN DATA
-        # CRITICAL: The name inside worksheet='...' MUST match your Google Sheet tab exactly!
+        # 3. FORCE the link here. 
+        # CRITICAL: The worksheet name must match your tab exactly.
         df = conn.read(spreadsheet=sheet_url, worksheet='Inventory_Drive_Around')
         
         # Clean Columns
@@ -64,7 +62,7 @@ def load_gnc_data():
         
         df = df.fillna("").astype(str)
 
-        # READ NOTES (Optional - wrapped in try/except)
+        # READ NOTES
         sales_notes_map = {}
         try:
             # We use the same hardcoded link here too
@@ -80,7 +78,7 @@ def load_gnc_data():
                 if note_col:
                     sales_notes_map = notes_df.groupby('ITEMCODE')[note_col].apply(lambda x: list(x.dropna().astype(str))).to_dict()
         except: 
-            pass # Fail silently if Notes tab doesn't exist
+            pass 
 
         return df, sales_notes_map
 
