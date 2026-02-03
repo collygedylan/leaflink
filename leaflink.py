@@ -10,12 +10,14 @@ st.set_page_config(page_title="GNC | LeafLink", layout="wide", initial_sidebar_s
 st.markdown(f"""
     <style>
     [data-testid="stSidebar"] {{ background-color: #0A0A0A !important; border-right: 2px solid #333 !important; }}
+    
     /* Optimize input rendering */
     div[data-testid="stTextInput"] > div > div > input,
     div[data-testid="stSelectbox"] > div > div > div {{
         background-color: #1E1E1E !important; color: #E0E0E0 !important; border: 1px solid #444 !important; 
         border-radius: 8px !important; height: 50px !important;
     }}
+    
     /* Hardware accelerated buttons */
     div.stButton > button {{
         background-color: #2D2D2D !important; color: #FFFFFF !important; border: 1px solid #444 !important;
@@ -26,14 +28,20 @@ st.markdown(f"""
     div.stButton > button:hover {{ border-color: #006847 !important; color: #006847 !important; }}
     div.stButton > button[kind="primary"] {{ background-color: #006847 !important; color: #FFFFFF !important; border: none !important; }}
     h1, h2, h3 {{ color: #006847 !important; }}
-    /* Secondary Header Styling */
+    
+    /* ✅ FIXED: SECONDARY HEADER COLORS */
     .sec-header {{
         background-color: #262730;
+        color: #FFFFFF !important; /* Sets the values (e.g., '868') to WHITE */
         padding: 10px;
         border-radius: 5px;
         border-left: 4px solid #006847;
         margin-bottom: 15px;
         font-size: 0.9rem;
+    }}
+    /* Sets the bold labels (e.g., 'PRIORITY:') to BRAND GREEN */
+    .sec-header b {{
+        color: #006847 !important; 
     }}
     </style>
     """, unsafe_allow_html=True)
@@ -84,7 +92,6 @@ def load_gnc_data():
         if not df.empty:
             df.columns = df.columns.str.strip().str.upper()
             
-            # Ensure critical columns exist for the new UI
             required_cols = [
                 'LOC_SALESNOTE', 'CALIPER', 'SPEC', 'LOC_COMMENTS', 'MATCH_PCT', 
                 'PIC_NOTE', 'PRIME_QTY', 'PHOTO', 'STATUS', 'ITEMCODE', 
@@ -93,12 +100,10 @@ def load_gnc_data():
                 'CURRENT_SALESNOTE', 'PTRAVAILABLE', 'S_LTS'
             ]
             
-            # Batch create missing columns
             missing = [c for c in required_cols if c not in df.columns]
             if missing:
                 df[pd.Index(missing)] = ""
             
-            # Fast fillna
             df = df.fillna("").astype(str)
 
         # PROCESS NOTES
@@ -226,13 +231,10 @@ with st.container():
                         uid = f"{row['BLOCKALPHA']}_{row['LOCATIONCODE']}_{idx}"
                         item_code = str(row.get('ITEMCODE', '')).strip()
                         
-                        # 1. NEW PRIMARY HEADER: COMMONNAME | CONTSIZE | LOTCODE
                         header_text = f"{row.get('COMMONNAME','')} | {row.get('CONTSIZE','')} | {row.get('LOTCODE','')}"
                         
                         with st.expander(header_text, expanded=False):
                             
-                            # 2. NEW SECONDARY HEADER: PRIORITY | NOTE | PTR | LTS
-                            # Using HTML class 'sec-header' defined in style section
                             sec_info = f"""
                             <div class='sec-header'>
                                 <b>PRIORITY:</b> {row.get('PRIORITY','')} <br>
@@ -242,18 +244,14 @@ with st.container():
                             """
                             st.markdown(sec_info, unsafe_allow_html=True)
 
-                            # 3. TOGGLE SWITCH
                             show_full_details = st.toggle("📋 SHOW FULL FILE DATA", key=f"tgl_{uid}")
                             
                             if show_full_details:
-                                # --- SHOW ALL COLUMNS (READ ONLY) ---
                                 st.markdown("#### 📂 FULL FILE DATA")
                                 for col, val in row.items():
-                                    if str(val).strip(): # Only show if not empty
+                                    if str(val).strip(): 
                                         st.write(f"**{col}:** {val}")
-                            
                             else:
-                                # --- SHOW DATA ENTRY FORM ---
                                 c1, c2 = st.columns(2)
                                 with c1:
                                     caliper = st.text_input("CALIPER", value=str(row.get('CALIPER','')), key=f"cal_{uid}")
