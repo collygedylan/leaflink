@@ -38,16 +38,20 @@ def get_base64_leaf():
 
 leaf_b64 = get_base64_leaf()
 
-# --- MODIFIED: CLOUD DATA LOADER ---
+# --- MODIFIED: CLOUD DATA LOADER (Hardcoded Link to Fix 400 Error) ---
 @st.cache_data(ttl=10) # Checks for updates every 10 seconds
 def load_gnc_data():
     try:
-        # Connect to Google Sheets
+        # 1. DEFINE THE CLEAN LINK HERE
+        # We hardcode it to avoid Streamlit Secrets parsing errors
+        sheet_url = "https://docs.google.com/spreadsheets/d/1ffMWw09rxPSZOsn83PUX0uynqdX9xANUlaMk2TIvbbs/edit"
+
+        # 2. Connect
         conn = st.connection("gsheets", type=GSheetsConnection)
         
-        # READ MAIN DATA
-        # Ensure your Google Sheet tab is named exactly 'Inventory_Drive_Around'
-        df = conn.read(worksheet='Inventory_Drive_Around')
+        # 3. READ MAIN DATA
+        # CRITICAL: The name inside worksheet='...' MUST match your Google Sheet tab exactly!
+        df = conn.read(spreadsheet=sheet_url, worksheet='Inventory_Drive_Around')
         
         # Clean Columns
         df.columns = [str(c).strip().upper() for c in df.columns]
@@ -63,7 +67,8 @@ def load_gnc_data():
         # READ NOTES (Optional - wrapped in try/except)
         sales_notes_map = {}
         try:
-            notes_df = conn.read(worksheet='S1_SalesNotes')
+            # We use the same hardcoded link here too
+            notes_df = conn.read(spreadsheet=sheet_url, worksheet='S1_SalesNotes')
             notes_df.columns = [str(c).strip().upper() for c in notes_df.columns]
             
             if 'ITEMCODE' in notes_df.columns:
