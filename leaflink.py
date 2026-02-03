@@ -26,6 +26,15 @@ st.markdown(f"""
     div.stButton > button:hover {{ border-color: #006847 !important; color: #006847 !important; }}
     div.stButton > button[kind="primary"] {{ background-color: #006847 !important; color: #FFFFFF !important; border: none !important; }}
     h1, h2, h3 {{ color: #006847 !important; }}
+    /* Secondary Header Styling */
+    .sec-header {{
+        background-color: #262730;
+        padding: 10px;
+        border-radius: 5px;
+        border-left: 4px solid #006847;
+        margin-bottom: 15px;
+        font-size: 0.9rem;
+    }}
     </style>
     """, unsafe_allow_html=True)
 
@@ -49,7 +58,6 @@ if st.session_state.close_sidebar:
     st.session_state.close_sidebar = False
 
 # --- 4. HIGH-PERFORMANCE DATA LOADER ---
-# Cache for 10 minutes (600s) to prevent lag during navigation. Use "Refresh" button to update.
 @st.cache_data(ttl=600)
 def load_gnc_data():
     try:
@@ -58,7 +66,7 @@ def load_gnc_data():
         inv_url = f"https://docs.google.com/spreadsheets/d/{sheet_id}/gviz/tq?tqx=out:csv&sheet=Inventory_Drive_Around"
         notes_url = f"https://docs.google.com/spreadsheets/d/{sheet_id}/gviz/tq?tqx=out:csv&sheet=S1_SalesNotes"
 
-        # ⚡ PARALLEL DOWNLOADER (Downloads both sheets simultaneously)
+        # ⚡ PARALLEL DOWNLOADER
         def fetch_csv(url):
             try:
                 return pd.read_csv(url)
@@ -72,11 +80,18 @@ def load_gnc_data():
             df = future_inv.result()
             notes_df = future_notes.result()
 
-        # 🚀 VECTORIZED CLEANING (Faster than loops)
+        # 🚀 VECTORIZED CLEANING
         if not df.empty:
             df.columns = df.columns.str.strip().str.upper()
             
-            required_cols = ['LOC_SALESNOTE', 'CALIPER', 'SPEC', 'LOC_COMMENTS', 'MATCH_PCT', 'PIC_NOTE', 'PRIME_QTY', 'PHOTO', 'STATUS', 'ITEMCODE', 'SALES_ASSIGNEDTO', 'SEASON', 'COMMONNAME', 'CONTSIZE', 'BLOCKALPHA', 'LOCATIONCODE']
+            # Ensure critical columns exist for the new UI
+            required_cols = [
+                'LOC_SALESNOTE', 'CALIPER', 'SPEC', 'LOC_COMMENTS', 'MATCH_PCT', 
+                'PIC_NOTE', 'PRIME_QTY', 'PHOTO', 'STATUS', 'ITEMCODE', 
+                'SALES_ASSIGNEDTO', 'SEASON', 'COMMONNAME', 'CONTSIZE', 
+                'BLOCKALPHA', 'LOCATIONCODE', 'LOTCODE', 'PRIORITY', 
+                'CURRENT_SALESNOTE', 'PTRAVAILABLE', 'S_LTS'
+            ]
             
             # Batch create missing columns
             missing = [c for c in required_cols if c not in df.columns]
@@ -91,17 +106,12 @@ def load_gnc_data():
         if not notes_df.empty:
             notes_df.columns = notes_df.columns.str.strip().str.upper()
             if 'ITEMCODE' in notes_df.columns:
-                # Find the first column with "NOTE" in the name
                 note_cols = [c for c in notes_df.columns if 'NOTE' in c]
                 note_col = note_cols[0] if note_cols else None
-                
                 if not note_col:
-                    # Fallback: take the 2nd column if no "NOTE" column found
                     cols = [c for c in notes_df.columns if c != 'ITEMCODE']
                     if cols: note_col = cols[0]
-
                 if note_col:
-                    # Optimized Groupby
                     sales_notes_map = notes_df.groupby('ITEMCODE')[note_col].apply(lambda x: list(x.dropna().astype(str))).to_dict()
 
         return df, sales_notes_map
@@ -123,7 +133,6 @@ if 'view_mode' not in st.session_state: st.session_state.view_mode = 'pending'
 with st.sidebar:
     st.markdown("<h2 style='text-align:center;'>GNC</h2>", unsafe_allow_html=True)
     
-    # 🔄 REFRESH BUTTON (Crucial for speed optimization)
     if st.button("🔄 REFRESH DATA", use_container_width=True):
         st.cache_data.clear()
         st.rerun()
@@ -205,7 +214,7 @@ with st.container():
                         if st.button(label, key=f"loc_{row['LOCATIONCODE']}"):
                             st.session_state.sel_loc = row['LOCATIONCODE']; st.session_state.task_step = 'details'; st.rerun()
 
-                # --- DETAIL STACK ---
+                # --- DETAIL STACK (MODIFIED UI) ---
                 elif st.session_state.task_step == 'details':
                     if st.button("⬅️ BACK"): st.session_state.task_step = 'location'; st.rerun()
                     st.markdown(f"### {st.session_state.sel_block} - {st.session_state.sel_loc}")
@@ -217,44 +226,66 @@ with st.container():
                         uid = f"{row['BLOCKALPHA']}_{row['LOCATIONCODE']}_{idx}"
                         item_code = str(row.get('ITEMCODE', '')).strip()
                         
-                        with st.expander(f"{row.get('COMMONNAME')} | {row.get('CONTSIZE')}", expanded=False):
+                        # 1. NEW PRIMARY HEADER: COMMONNAME | CONTSIZE | LOTCODE
+                        header_text = f"{row.get('COMMONNAME','')} | {row.get('CONTSIZE','')} | {row.get('LOTCODE','')}"
+                        
+                        with st.expander(header_text, expanded=False):
                             
-                            st.markdown("##### 📸 PHOTO (Disabled in Read-Only Mode)")
-                            
-                            st.markdown("---")
+                            # 2. NEW SECONDARY HEADER: PRIORITY | NOTE | PTR | LTS
+                            # Using HTML class 'sec-header' defined in style section
+                            sec_info = f"""
+                            <div class='sec-header'>
+                                <b>PRIORITY:</b> {row.get('PRIORITY','')} <br>
+                                <b>NOTE:</b> {row.get('CURRENT_SALESNOTE','')} <br>
+                                <b>PTR:</b> {row.get('PTRAVAILABLE','')} &nbsp;|&nbsp; <b>LTS:</b> {row.get('S_LTS','')}
+                            </div>
+                            """
+                            st.markdown(sec_info, unsafe_allow_html=True)
 
-                            c1, c2 = st.columns(2)
-                            with c1:
-                                caliper = st.text_input("CALIPER", value=str(row.get('CALIPER','')), key=f"cal_{uid}")
-                            with c2:
-                                spec = st.text_input("SPEC", value=str(row.get('SPEC','')), key=f"spec_{uid}")
+                            # 3. TOGGLE SWITCH
+                            show_full_details = st.toggle("📋 SHOW FULL FILE DATA", key=f"tgl_{uid}")
                             
-                            c3, c4 = st.columns(2)
-                            with c3:
-                                match_options = [str(i) for i in range(0, 105, 5)]
-                                current_match = str(row.get('MATCH_PCT', '')).strip()
-                                if current_match and current_match not in match_options:
-                                    match_options = [current_match] + match_options
-                                match_index = match_options.index(current_match) if current_match in match_options else 0
-                                match_pct = st.selectbox("MATCH %", options=match_options, index=match_index, key=f"match_{uid}")
-                            with c4:
-                                prime_qty = st.text_input("PRIME QTY", value=str(row.get('PRIME_QTY','')), key=f"prime_{uid}")
+                            if show_full_details:
+                                # --- SHOW ALL COLUMNS (READ ONLY) ---
+                                st.markdown("#### 📂 FULL FILE DATA")
+                                for col, val in row.items():
+                                    if str(val).strip(): # Only show if not empty
+                                        st.write(f"**{col}:** {val}")
                             
-                            current_note = str(row.get('LOC_SALESNOTE', '')).strip()
-                            note_options = sales_notes_map.get(item_code, [])
-                            options = [""] + note_options
-                            if current_note and current_note not in options:
-                                options.append(current_note)
-                            
-                            loc_note = st.selectbox("LOC SALES NOTE", options=options, index=options.index(current_note) if current_note in options else 0, key=f"lnote_{uid}")
-                            
-                            comments = st.text_input("LOC COMMENTS", value=str(row.get('LOC_COMMENTS','')), key=f"cmts_{uid}")
-                            pic_note = st.text_input("PIC NOTE", value=str(row.get('PIC_NOTE','')), key=f"pnote_{uid}")
-                            
-                            st.markdown("<br>", unsafe_allow_html=True)
-                            
-                            if st.button("MARK COMPLETE", key=f"done_{uid}", type="primary"):
-                                st.warning("⚠️ Saving disabled for 24h (Google API Quota Limit).")
+                            else:
+                                # --- SHOW DATA ENTRY FORM ---
+                                c1, c2 = st.columns(2)
+                                with c1:
+                                    caliper = st.text_input("CALIPER", value=str(row.get('CALIPER','')), key=f"cal_{uid}")
+                                with c2:
+                                    spec = st.text_input("SPEC", value=str(row.get('SPEC','')), key=f"spec_{uid}")
+                                
+                                c3, c4 = st.columns(2)
+                                with c3:
+                                    match_options = [str(i) for i in range(0, 105, 5)]
+                                    current_match = str(row.get('MATCH_PCT', '')).strip()
+                                    if current_match and current_match not in match_options:
+                                        match_options = [current_match] + match_options
+                                    match_index = match_options.index(current_match) if current_match in match_options else 0
+                                    match_pct = st.selectbox("MATCH %", options=match_options, index=match_index, key=f"match_{uid}")
+                                with c4:
+                                    prime_qty = st.text_input("PRIME QTY", value=str(row.get('PRIME_QTY','')), key=f"prime_{uid}")
+                                
+                                current_note = str(row.get('LOC_SALESNOTE', '')).strip()
+                                note_options = sales_notes_map.get(item_code, [])
+                                options = [""] + note_options
+                                if current_note and current_note not in options:
+                                    options.append(current_note)
+                                
+                                loc_note = st.selectbox("LOC SALES NOTE", options=options, index=options.index(current_note) if current_note in options else 0, key=f"lnote_{uid}")
+                                
+                                comments = st.text_input("LOC COMMENTS", value=str(row.get('LOC_COMMENTS','')), key=f"cmts_{uid}")
+                                pic_note = st.text_input("PIC NOTE", value=str(row.get('PIC_NOTE','')), key=f"pnote_{uid}")
+                                
+                                st.markdown("<br>", unsafe_allow_html=True)
+                                
+                                if st.button("MARK COMPLETE", key=f"done_{uid}", type="primary"):
+                                    st.warning("⚠️ Saving disabled for 24h (Google API Quota Limit).")
 
         # --- DRIVE AROUND ---
         elif st.session_state.page == "DRIVEAROUND":
