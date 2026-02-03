@@ -6,109 +6,101 @@ from concurrent.futures import ThreadPoolExecutor
 # --- 1. SETTINGS & PAGE CONFIG ---
 st.set_page_config(page_title="GNC | LeafLink", layout="wide", initial_sidebar_state="expanded")
 
-# --- 2. ULTRA-MODERN DARK CSS ---
+# --- 2. ULTRA-MODERN DARK CSS (The "Sleek" Upgrade) ---
 st.markdown(f"""
     <style>
-    /* APP BACKGROUND */
-    .stApp {{ background-color: #050505; }} /* Pitch black for high contrast */
-    [data-testid="stSidebar"] {{ background-color: #000000 !important; border-right: 1px solid #333 !important; }}
+    /* 🌑 APP BACKGROUND: Deep Matte Black */
+    .stApp {{ background-color: #080808; }}
+    [data-testid="stSidebar"] {{ background-color: #000000 !important; border-right: 1px solid #222 !important; }}
     
-    /* INPUT FIELDS - SLEEK & DARK */
+    /* ⌨️ INPUT FIELDS: "Etched Glass" Look */
     div[data-testid="stTextInput"] > div > div > input,
     div[data-testid="stSelectbox"] > div > div > div {{
-        background-color: #1a1a1a !important; 
-        color: #FFFFFF !important; 
+        background-color: #141414 !important; 
+        color: #E0E0E0 !important; 
         border: 1px solid #333 !important; 
         border-radius: 12px !important; 
-        height: 55px !important;
+        height: 55px !important; /* Thumb-friendly height */
         font-size: 16px !important;
+        box-shadow: inset 2px 2px 5px rgba(0,0,0,0.5); /* Inner shadow for depth */
     }}
-    div[data-testid="stTextInput"] > div > div > input:focus {{
+    div[data-testid="stTextInput"] > div > div > input:focus,
+    div[data-testid="stSelectbox"] > div > div > div:focus {{
         border-color: #00D08E !important; /* Neon Green Focus */
+        box-shadow: 0 0 8px rgba(0, 208, 142, 0.3) !important;
     }}
     
-    /* BUTTONS - HIGH END */
+    /* 🔘 STANDARD BUTTONS: Matte Dark Grey */
     div.stButton > button {{
-        background-color: #1a1a1a !important; 
-        color: #E0E0E0 !important; 
+        background-color: #1F1F1F !important; 
+        color: #CCCCCC !important; 
         border: 1px solid #333 !important;
         border-radius: 12px !important; 
-        height: 55px !important; 
+        height: 60px !important; /* Large touch target */
         font-weight: 700 !important; 
-        width: 100% !important;
-        transition: all 0.2s ease-in-out;
+        font-size: 15px !important;
+        width: 100% !important; /* Full width for mobile */
+        transition: all 0.15s ease-in-out;
         text-transform: uppercase;
         letter-spacing: 1px;
     }}
+    /* Hover Effect */
     div.stButton > button:hover {{ 
-        border-color: #00D08E !important; 
-        color: #00D08E !important; 
-        box-shadow: 0 0 10px rgba(0, 208, 142, 0.2);
+        border-color: #666 !important; 
+        color: #FFF !important; 
+        transform: translateY(-2px); /* Slight lift */
     }}
+    /* Click Effect (The "Press") */
+    div.stButton > button:active {{ 
+        transform: scale(0.97); 
+    }}
+
+    /* 🟢 PRIMARY BUTTON (Save/Action): The "Hero" Button */
     div.stButton > button[kind="primary"] {{ 
-        background: linear-gradient(135deg, #006847 0%, #004d35 100%) !important; 
+        background: linear-gradient(135deg, #006847 0%, #009B6B 100%) !important; 
         color: #FFFFFF !important; 
         border: none !important; 
-        box-shadow: 0 4px 15px rgba(0, 104, 71, 0.5);
+        box-shadow: 0 4px 15px rgba(0, 104, 71, 0.4);
+    }}
+    div.stButton > button[kind="primary"]:hover {{
+        box-shadow: 0 6px 20px rgba(0, 208, 142, 0.6);
+        color: #FFF !important;
     }}
     
-    /* TEXT & HEADERS */
-    h1, h2, h3 {{ color: #FFFFFF !important; font-weight: 800 !important; letter-spacing: -0.5px; }}
-    p, label {{ color: #CCCCCC !important; font-weight: 500 !important; }}
-    
-    /* DASHBOARD CARD (The "HUD") */
+    /* 📊 HUD DASHBOARD CARD */
     .hud-card {{
-        background-color: #121212;
+        background: linear-gradient(180deg, #1A1A1A 0%, #0F0F0F 100%);
         border: 1px solid #333;
         border-radius: 16px;
         padding: 20px;
-        margin-bottom: 20px;
+        margin-bottom: 25px;
         display: flex;
         justify-content: space-between;
         align-items: center;
         flex-wrap: wrap;
-        box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+        box-shadow: 0 10px 30px rgba(0,0,0,0.6);
     }}
-    .hud-item {{
-        text-align: center;
-        padding: 0 15px;
-    }}
-    .hud-label {{
-        font-size: 0.75rem;
-        color: #888;
-        text-transform: uppercase;
-        letter-spacing: 1px;
-        margin-bottom: 4px;
-    }}
-    .hud-value {{
-        font-size: 1.4rem;
-        font-weight: 900;
-        color: #00D08E; /* NEON GREEN POP */
-    }}
-    .hud-title {{
-        font-size: 1.8rem;
-        font-weight: 900;
-        color: #FFF;
-        margin-bottom: 5px;
-    }}
-    .hud-subtitle {{
-        font-size: 1rem;
-        color: #AAA;
-    }}
+    .hud-header {{ width: 100%; margin-bottom: 15px; border-bottom: 1px solid #333; padding-bottom: 10px; }}
+    .hud-title {{ font-size: 1.6rem; font-weight: 800; color: #FFF; margin: 0; }}
+    .hud-subtitle {{ font-size: 1rem; color: #888; margin-top: 2px; font-family: monospace; }}
     
-    /* LIST ITEM CARD */
+    .hud-stat {{ text-align: center; flex: 1; min-width: 80px; }}
+    .hud-label {{ font-size: 0.7rem; color: #666; font-weight: bold; letter-spacing: 1px; margin-bottom: 4px; }}
+    .hud-value {{ font-size: 1.5rem; font-weight: 900; color: #00D08E; text-shadow: 0 0 10px rgba(0,208,142,0.3); }}
+    
+    /* 📋 LIST CARDS */
     .list-card {{
         background-color: #121212;
         border-left: 4px solid #333;
-        padding: 15px;
+        padding: 16px;
         margin-bottom: 10px;
         border-radius: 8px;
-        transition: border-color 0.2s;
-        cursor: pointer;
+        transition: all 0.2s;
     }}
-    .list-card:hover {{
-        border-left-color: #00D08E;
-    }}
+    .list-card-title {{ color: #FFF; font-weight: 700; font-size: 1.1rem; }}
+    .list-card-sub {{ color: #888; font-size: 0.9rem; margin-top: 2px; }}
+    .list-card-tags {{ color: #00D08E; font-size: 0.8rem; margin-top: 8px; font-weight: 600; text-transform: uppercase; }}
+
     </style>
     """, unsafe_allow_html=True)
 
@@ -167,7 +159,7 @@ if 'view_mode' not in st.session_state: st.session_state.view_mode = 'pending'
 
 # --- 6. SIDEBAR ---
 with st.sidebar:
-    st.markdown("<h2 style='text-align:center;'>GNC</h2>", unsafe_allow_html=True)
+    st.markdown("<h2 style='text-align:center; color:#00D08E;'>GNC</h2>", unsafe_allow_html=True)
     if st.button("🔄 REFRESH DATA", use_container_width=True):
         st.cache_data.clear()
         st.rerun()
@@ -207,7 +199,7 @@ with st.container():
                     st.session_state.page = "MYTASKS"; st.session_state.view_mode = "pending"; st.session_state.task_step = 'block'; st.rerun()
                 if st.button("COMPLETED TASKS"):
                     st.session_state.page = "MYTASKS"; st.session_state.view_mode = "complete"; st.session_state.task_step = 'block'; st.rerun()
-                st.markdown("---")
+                st.markdown("<br>", unsafe_allow_html=True)
                 if st.button("⬅️ BACK"): st.session_state.sales_stage = 'select_member'; st.rerun()
 
         # --- MYTASKS (DATA ENTRY) ---
@@ -230,6 +222,7 @@ with st.container():
                 else:
                     blocks = my_data.groupby('BLOCKALPHA').size().reset_index(name='counts')
                     for _, row in blocks.iterrows():
+                        # Sleek Layout for Block Buttons
                         if st.button(f"{row['BLOCKALPHA']} ({row['counts']} Trees)", key=f"blk_{row['BLOCKALPHA']}"):
                             st.session_state.sel_block = row['BLOCKALPHA']; st.session_state.task_step = 'location'; st.rerun()
 
@@ -253,24 +246,27 @@ with st.container():
                 
                 # Render list as nice cards
                 for idx, row in final.iterrows():
-                    # Visual Card using HTML, clickable Button below it covers the action
+                    # HTML Card for Visuals
                     card_html = f"""
-                    <div style="background-color:#121212; border-left:4px solid #006847; padding:12px; margin-bottom:5px; border-radius:6px;">
-                        <div style="color:#FFF; font-weight:bold; font-size:1.1rem;">{row.get('COMMONNAME')}</div>
-                        <div style="color:#888; font-size:0.9rem;">{row.get('CONTSIZE')} | {row.get('LOTCODE')}</div>
-                        <div style="color:#00D08E; font-size:0.8rem; margin-top:4px;">
-                            PRIORITY: {row.get('PRIORITY')} &nbsp;|&nbsp; PTR: {row.get('PTRAVAILABLE')}
+                    <div class="list-card">
+                        <div class="list-card-title">{row.get('COMMONNAME')}</div>
+                        <div class="list-card-sub">{row.get('CONTSIZE')} | {row.get('LOTCODE')}</div>
+                        <div class="list-card-tags">
+                            PRIORITY: {row.get('PRIORITY')} &nbsp;&bull;&nbsp; PTR: {row.get('PTRAVAILABLE')}
                         </div>
                     </div>
                     """
                     st.markdown(card_html, unsafe_allow_html=True)
-                    if st.button("OPEN ITEM ➤", key=f"open_{idx}"):
+                    
+                    # Full-Width Action Button
+                    if st.button("OPEN ITEM ➤", key=f"open_{idx}", type="secondary"):
                         st.session_state.sel_item_idx = idx
                         st.session_state.task_step = 'edit_item'
                         st.rerun()
-                    st.markdown("<div style='margin-bottom:15px'></div>", unsafe_allow_html=True)
+                    
+                    st.markdown("<div style='margin-bottom:12px'></div>", unsafe_allow_html=True)
 
-            # STEP 4: EDIT ITEM (THE FULL SCREEN COMMAND CENTER)
+            # STEP 4: EDIT ITEM (THE COMMAND CENTER)
             elif st.session_state.task_step == 'edit_item':
                 idx = st.session_state.sel_item_idx
                 if idx not in df.index:
@@ -279,22 +275,22 @@ with st.container():
                 row = df.loc[idx]
                 item_code = str(row.get('ITEMCODE', '')).strip()
 
-                # --- 1. THE HUD HEADER (INFO AT A GLANCE) ---
+                # --- 1. THE HUD HEADER ---
                 hud_html = f"""
                 <div class="hud-card">
-                    <div style="width:100%; margin-bottom:15px;">
+                    <div class="hud-header">
                         <div class="hud-title">{row.get('COMMONNAME')}</div>
-                        <div class="hud-subtitle">{row.get('CONTSIZE')}  •  {row.get('LOTCODE')}</div>
+                        <div class="hud-subtitle">{row.get('CONTSIZE')} • {row.get('LOTCODE')}</div>
                     </div>
-                    <div class="hud-item">
+                    <div class="hud-stat">
                         <div class="hud-label">PRIORITY</div>
                         <div class="hud-value">{row.get('PRIORITY')}</div>
                     </div>
-                    <div class="hud-item">
+                    <div class="hud-stat">
                         <div class="hud-label">PTR</div>
                         <div class="hud-value">{row.get('PTRAVAILABLE')}</div>
                     </div>
-                    <div class="hud-item">
+                    <div class="hud-stat">
                         <div class="hud-label">LTS</div>
                         <div class="hud-value" style="color:#FFF;">{row.get('S_LTS')}</div>
                     </div>
@@ -302,9 +298,10 @@ with st.container():
                 """
                 st.markdown(hud_html, unsafe_allow_html=True)
                 
-                st.markdown(f"<div style='background:#121212; padding:10px; border-radius:8px; border:1px solid #333; margin-bottom:20px; color:#CCC'><b>📝 NOTE:</b> {row.get('CURRENT_SALESNOTE')}</div>", unsafe_allow_html=True)
+                if row.get('CURRENT_SALESNOTE'):
+                    st.info(f"📝 NOTE: {row.get('CURRENT_SALESNOTE')}")
 
-                # --- 2. THE INPUT GRID (MODERN) ---
+                # --- 2. THE INPUT GRID ---
                 st.markdown("### 🛠️ DATA ENTRY")
                 
                 c1, c2 = st.columns(2)
@@ -331,17 +328,19 @@ with st.container():
 
                 pic_note = st.text_input("PIC NOTE", value=str(row.get('PIC_NOTE','')), key=f"pnote_{idx}")
 
-                st.markdown("---")
+                st.markdown("<br>", unsafe_allow_html=True)
                 
                 # --- 3. ACTIONS ---
+                # Buttons layout: 1 column for Back, 2 columns for Save to make Save bigger
                 b1, b2 = st.columns([1, 2])
                 with b1:
                     if st.button("⬅️ CANCEL"): 
                         st.session_state.task_step = 'list_items'; st.rerun()
                 with b2:
-                    if st.button("✅ SAVE & COMPLETE", type="primary"):
+                    if st.button("✅ SAVE & FINISH", type="primary"):
                         st.warning("⚠️ Saving disabled for 24h (Google API Quota Limit).")
 
+                st.markdown("<br>", unsafe_allow_html=True)
                 # Toggle Full Info
                 with st.expander("🔍 VIEW ALL FILE DATA"):
                     for k,v in row.items():
