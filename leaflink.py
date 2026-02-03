@@ -1,10 +1,6 @@
 import streamlit as st
 import pandas as pd
-import base64
-import os
 import streamlit.components.v1 as components
-from datetime import datetime
-from streamlit_gsheets import GSheetsConnection
 
 # --- 1. SETTINGS ---
 st.set_page_config(page_title="GNC | LeafLink", layout="wide", initial_sidebar_state="expanded")
@@ -28,24 +24,21 @@ if st.session_state.close_sidebar:
     )
     st.session_state.close_sidebar = False
 
-# --- 3. HELPER FUNCTIONS ---
-def get_base64_leaf():
-    return None 
-
-leaf_b64 = get_base64_leaf()
-
-# --- 4. DATA LOADER ---
+# --- 3. DATA LOADER (DIRECT PUBLIC READ) ---
 @st.cache_data(ttl=10)
 def load_gnc_data():
     try:
-        # 👇👇👇 YOUR NEW LINK IS HERE 👇👇👇
-        sheet_url = "https://docs.google.com/spreadsheets/d/1FNuWtLD6okE7tOxD3dRcUXVWL9bwwSye1nhGSVDiiTs"
-
-        conn = st.connection("gsheets", type=GSheetsConnection)
+        # 🔗 PUBLIC CSV LINKS (Bypasses Google API Auth)
+        sheet_id = "1FNuWtLD6okE7tOxD3dRcUXVWL9bwwSye1nhGSVDiiTs"
         
-        # READ DATA
-        # ⚠️ IMPORTANT: Ensure your new sheet has a tab named exactly 'Inventory_Drive_Around'
-        df = conn.read(spreadsheet=sheet_url, worksheet='Inventory_Drive_Around')
+        # URL for Inventory Tab
+        inv_url = f"https://docs.google.com/spreadsheets/d/{sheet_id}/gviz/tq?tqx=out:csv&sheet=Inventory_Drive_Around"
+        
+        # URL for Notes Tab
+        notes_url = f"https://docs.google.com/spreadsheets/d/{sheet_id}/gviz/tq?tqx=out:csv&sheet=S1_SalesNotes"
+
+        # 1. READ INVENTORY
+        df = pd.read_csv(inv_url)
         
         # Clean Columns
         df.columns = [str(c).strip().upper() for c in df.columns]
@@ -58,11 +51,10 @@ def load_gnc_data():
         
         df = df.fillna("").astype(str)
 
-        # READ NOTES
+        # 2. READ NOTES
         sales_notes_map = {}
         try:
-            # ⚠️ IMPORTANT: Ensure your new sheet has a tab named 'S1_SalesNotes'
-            notes_df = conn.read(spreadsheet=sheet_url, worksheet='S1_SalesNotes')
+            notes_df = pd.read_csv(notes_url)
             notes_df.columns = [str(c).strip().upper() for c in notes_df.columns]
             
             if 'ITEMCODE' in notes_df.columns:
@@ -79,10 +71,11 @@ def load_gnc_data():
         return df, sales_notes_map
 
     except Exception as e:
-        st.error(f"⚠️ Connection Error: {e}")
+        st.error(f"⚠️ Could not read data: {e}")
+        st.info("Make sure the Google Sheet is set to 'Anyone with the link' > 'Editor'")
         return None, {}
 
-# --- 5. CSS STYLING ---
+# --- 4. CSS STYLING ---
 st.markdown(f"""
     <style>
     [data-testid="stSidebar"] {{ background-color: #0A0A0A !important; border-right: 2px solid #333 !important; }}
@@ -101,7 +94,7 @@ st.markdown(f"""
     </style>
     """, unsafe_allow_html=True)
 
-# --- 6. STATE MANAGEMENT ---
+# --- 5. STATE MANAGEMENT ---
 if 'page' not in st.session_state: st.session_state.page = 'DRIVEAROUND'
 if 'step' not in st.session_state: st.session_state.step = 'variety'
 if 'task_step' not in st.session_state: st.session_state.task_step = 'block'
@@ -110,7 +103,7 @@ if 'user_name' not in st.session_state: st.session_state.user_name = "DYLAN"
 if 'sales_stage' not in st.session_state: st.session_state.sales_stage = 'select_member'
 if 'view_mode' not in st.session_state: st.session_state.view_mode = 'pending'
 
-# --- 7. SIDEBAR ---
+# --- 6. SIDEBAR ---
 with st.sidebar:
     st.markdown("<h2 style='text-align:center;'>GNC</h2>", unsafe_allow_html=True)
     nav_pages = ["OVERVIEW", "DRIVEAROUND", "MYTASKS", "SALESTEAM", "INVENTORYTEAM", "SOC", "SALESINVTRACKING", "WEATHER", "CONTACT"]
@@ -123,12 +116,12 @@ with st.sidebar:
             st.session_state.close_sidebar = True
             st.rerun()
 
-# --- 8. MAIN WORKSPACE ---
+# --- 7. MAIN WORKSPACE ---
 df, sales_notes_map = load_gnc_data()
 
 with st.container():
     if df is None:
-        st.info("Waiting for connection... (If this persists, check Secrets)")
+        st.info("Waiting for data...")
     else:
         # --- SALES TEAM ---
         if st.session_state.page == "SALESTEAM":
@@ -236,27 +229,10 @@ with st.container():
                             
                             st.markdown("<br>", unsafe_allow_html=True)
                             
-                            # --- MODIFIED: WRITE BACK TO GOOGLE SHEETS ---
+                            # --- MODIFIED: WRITE BUTTON (DISABLED TEMPORARILY) ---
                             if st.button("MARK COMPLETE", key=f"done_{uid}", type="primary"):
-                                try:
-                                    # 1. Update the in-memory dataframe
-                                    df.at[idx, 'STATUS'] = 'COMPLETE'
-                                    df.at[idx, 'CALIPER'] = caliper
-                                    df.at[idx, 'SPEC'] = spec
-                                    df.at[idx, 'MATCH_PCT'] = match_pct
-                                    df.at[idx, 'PRIME_QTY'] = prime_qty
-                                    df.at[idx, 'LOC_SALESNOTE'] = loc_note
-                                    df.at[idx, 'LOC_COMMENTS'] = comments
-                                    df.at[idx, 'PIC_NOTE'] = pic_note
+                                st.warning("⚠️ Google has blocked saving for 24h due to quota limits. But the data is loaded!")
 
-                                    # 2. Write to Google Sheets
-                                    conn = st.connection("gsheets", type=GSheetsConnection)
-                                    conn.update(worksheet='Inventory_Drive_Around', data=df)
-                                    
-                                    st.success("✅ SAVED TO GOOGLE SHEETS!")
-                                    st.rerun()
-                                except Exception as e:
-                                    st.error(f"Failed to save: {e}")
 
         # --- DRIVE AROUND ---
         elif st.session_state.page == "DRIVEAROUND":
