@@ -7,10 +7,16 @@ from datetime import datetime
 from streamlit_gsheets import GSheetsConnection
 
 # --- 1. SETTINGS ---
-# (Local paths removed for Cloud compatibility)
-
-# --- 2. UI CONFIG ---
 st.set_page_config(page_title="GNC | LeafLink", layout="wide", initial_sidebar_state="expanded")
+
+# --- 2. DEBUG: VERIFY BOT IDENTITY ---
+# This will show you EXACTLY who is trying to log in.
+try:
+    secrets_email = st.secrets["connections"]["gsheets"]["service_account_info"]["client_email"]
+    st.warning(f"🤖 BOT EMAIL TRYING TO CONNECT: {secrets_email}")
+    st.info("👉 Please ensure THIS exact email is an 'Editor' on your Google Sheet.")
+except:
+    st.warning("Could not read bot email from secrets.")
 
 # --- 3. AUTO-CLOSE SIDEBAR LOGIC ---
 if 'close_sidebar' not in st.session_state:
@@ -37,18 +43,16 @@ def get_base64_leaf():
 
 leaf_b64 = get_base64_leaf()
 
-# --- MODIFIED: CLOUD DATA LOADER (FIXED URL) ---
+# --- 5. DATA LOADER ---
 @st.cache_data(ttl=10)
 def load_gnc_data():
     try:
-        # ✅ THE FIX: URL must end exactly at the ID. No "/edit" or "?gid=".
+        # THE CLEAN URL (No /edit, no gid)
         sheet_url = "https://docs.google.com/spreadsheets/d/1ffMWw09rxPSZOsn83PUX0uynqdX9xANUlaMk2TIvbbs"
 
-        # 2. Connect
         conn = st.connection("gsheets", type=GSheetsConnection)
         
-        # 3. Read Data
-        # CRITICAL: Tab name must be exactly 'Inventory_Drive_Around'
+        # READ DATA
         df = conn.read(spreadsheet=sheet_url, worksheet='Inventory_Drive_Around')
         
         # Clean Columns
@@ -65,7 +69,6 @@ def load_gnc_data():
         # READ NOTES
         sales_notes_map = {}
         try:
-            # We use the same clean URL here
             notes_df = conn.read(spreadsheet=sheet_url, worksheet='S1_SalesNotes')
             notes_df.columns = [str(c).strip().upper() for c in notes_df.columns]
             
@@ -86,7 +89,7 @@ def load_gnc_data():
         st.error(f"⚠️ Connection Error: {e}")
         return None, {}
 
-# --- 5. CSS STYLING ---
+# --- 6. CSS STYLING ---
 st.markdown(f"""
     <style>
     [data-testid="stSidebar"] {{ background-color: #0A0A0A !important; border-right: 2px solid #333 !important; }}
@@ -105,7 +108,7 @@ st.markdown(f"""
     </style>
     """, unsafe_allow_html=True)
 
-# --- 6. STATE MANAGEMENT ---
+# --- 7. STATE MANAGEMENT ---
 if 'page' not in st.session_state: st.session_state.page = 'DRIVEAROUND'
 if 'step' not in st.session_state: st.session_state.step = 'variety'
 if 'task_step' not in st.session_state: st.session_state.task_step = 'block'
@@ -114,7 +117,7 @@ if 'user_name' not in st.session_state: st.session_state.user_name = "DYLAN"
 if 'sales_stage' not in st.session_state: st.session_state.sales_stage = 'select_member'
 if 'view_mode' not in st.session_state: st.session_state.view_mode = 'pending'
 
-# --- 7. SIDEBAR ---
+# --- 8. SIDEBAR ---
 with st.sidebar:
     st.markdown("<h2 style='text-align:center;'>GNC</h2>", unsafe_allow_html=True)
     nav_pages = ["OVERVIEW", "DRIVEAROUND", "MYTASKS", "SALESTEAM", "INVENTORYTEAM", "SOC", "SALESINVTRACKING", "WEATHER", "CONTACT"]
@@ -127,7 +130,7 @@ with st.sidebar:
             st.session_state.close_sidebar = True
             st.rerun()
 
-# --- 8. MAIN WORKSPACE ---
+# --- 9. MAIN WORKSPACE ---
 df, sales_notes_map = load_gnc_data()
 
 with st.container():
