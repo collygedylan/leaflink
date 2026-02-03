@@ -37,18 +37,18 @@ def get_base64_leaf():
 
 leaf_b64 = get_base64_leaf()
 
-# --- MODIFIED: CLOUD DATA LOADER (THE FIX IS HERE) ---
+# --- MODIFIED: CLOUD DATA LOADER (FIXED URL) ---
 @st.cache_data(ttl=10)
 def load_gnc_data():
     try:
-        # 1. HARDCODED LINK (This bypasses the 400 Error)
-        sheet_url = "https://docs.google.com/spreadsheets/d/1ffMWw09rxPSZOsn83PUX0uynqdX9xANUlaMk2TIvbbs/edit"
+        # ✅ THE FIX: URL must end exactly at the ID. No "/edit" or "?gid=".
+        sheet_url = "https://docs.google.com/spreadsheets/d/1ffMWw09rxPSZOsn83PUX0uynqdX9xANUlaMk2TIvbbs"
 
         # 2. Connect
         conn = st.connection("gsheets", type=GSheetsConnection)
         
-        # 3. FORCE the link here. 
-        # CRITICAL: The worksheet name must match your tab exactly.
+        # 3. Read Data
+        # CRITICAL: Tab name must be exactly 'Inventory_Drive_Around'
         df = conn.read(spreadsheet=sheet_url, worksheet='Inventory_Drive_Around')
         
         # Clean Columns
@@ -65,7 +65,7 @@ def load_gnc_data():
         # READ NOTES
         sales_notes_map = {}
         try:
-            # We use the same hardcoded link here too
+            # We use the same clean URL here
             notes_df = conn.read(spreadsheet=sheet_url, worksheet='S1_SalesNotes')
             notes_df.columns = [str(c).strip().upper() for c in notes_df.columns]
             
@@ -207,7 +207,6 @@ with st.container():
                         with st.expander(f"{row.get('COMMONNAME')} | {row.get('CONTSIZE')}", expanded=False):
                             
                             st.markdown("##### 📸 PHOTO (Disabled in Cloud Mode)")
-                            # Image logic removed to prevent cloud crashes
                             
                             st.markdown("---")
 
