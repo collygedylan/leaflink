@@ -9,16 +9,7 @@ from streamlit_gsheets import GSheetsConnection
 # --- 1. SETTINGS ---
 st.set_page_config(page_title="GNC | LeafLink", layout="wide", initial_sidebar_state="expanded")
 
-# --- 2. DEBUG: VERIFY BOT IDENTITY ---
-# This will show you EXACTLY who is trying to log in.
-try:
-    secrets_email = st.secrets["connections"]["gsheets"]["service_account_info"]["client_email"]
-    st.warning(f"🤖 BOT EMAIL TRYING TO CONNECT: {secrets_email}")
-    st.info("👉 Please ensure THIS exact email is an 'Editor' on your Google Sheet.")
-except:
-    st.warning("Could not read bot email from secrets.")
-
-# --- 3. AUTO-CLOSE SIDEBAR LOGIC ---
+# --- 2. AUTO-CLOSE SIDEBAR LOGIC ---
 if 'close_sidebar' not in st.session_state:
     st.session_state.close_sidebar = False
 
@@ -37,17 +28,17 @@ if st.session_state.close_sidebar:
     )
     st.session_state.close_sidebar = False
 
-# --- 4. HELPER FUNCTIONS ---
+# --- 3. HELPER FUNCTIONS ---
 def get_base64_leaf():
     return None 
 
 leaf_b64 = get_base64_leaf()
 
-# --- 5. DATA LOADER ---
+# --- 4. DATA LOADER (Production Ready) ---
 @st.cache_data(ttl=10)
 def load_gnc_data():
     try:
-        # THE CLEAN URL (No /edit, no gid)
+        # THE CLEAN URL (Fixed for 400 Error)
         sheet_url = "https://docs.google.com/spreadsheets/d/1ffMWw09rxPSZOsn83PUX0uynqdX9xANUlaMk2TIvbbs"
 
         conn = st.connection("gsheets", type=GSheetsConnection)
@@ -89,7 +80,7 @@ def load_gnc_data():
         st.error(f"⚠️ Connection Error: {e}")
         return None, {}
 
-# --- 6. CSS STYLING ---
+# --- 5. CSS STYLING ---
 st.markdown(f"""
     <style>
     [data-testid="stSidebar"] {{ background-color: #0A0A0A !important; border-right: 2px solid #333 !important; }}
@@ -108,7 +99,7 @@ st.markdown(f"""
     </style>
     """, unsafe_allow_html=True)
 
-# --- 7. STATE MANAGEMENT ---
+# --- 6. STATE MANAGEMENT ---
 if 'page' not in st.session_state: st.session_state.page = 'DRIVEAROUND'
 if 'step' not in st.session_state: st.session_state.step = 'variety'
 if 'task_step' not in st.session_state: st.session_state.task_step = 'block'
@@ -117,7 +108,7 @@ if 'user_name' not in st.session_state: st.session_state.user_name = "DYLAN"
 if 'sales_stage' not in st.session_state: st.session_state.sales_stage = 'select_member'
 if 'view_mode' not in st.session_state: st.session_state.view_mode = 'pending'
 
-# --- 8. SIDEBAR ---
+# --- 7. SIDEBAR ---
 with st.sidebar:
     st.markdown("<h2 style='text-align:center;'>GNC</h2>", unsafe_allow_html=True)
     nav_pages = ["OVERVIEW", "DRIVEAROUND", "MYTASKS", "SALESTEAM", "INVENTORYTEAM", "SOC", "SALESINVTRACKING", "WEATHER", "CONTACT"]
@@ -130,7 +121,7 @@ with st.sidebar:
             st.session_state.close_sidebar = True
             st.rerun()
 
-# --- 9. MAIN WORKSPACE ---
+# --- 8. MAIN WORKSPACE ---
 df, sales_notes_map = load_gnc_data()
 
 with st.container():
