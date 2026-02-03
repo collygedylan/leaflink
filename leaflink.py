@@ -1,27 +1,18 @@
 import streamlit as st
 import pandas as pd
-import openpyxl
 import base64
 import os
 import streamlit.components.v1 as components
 from datetime import datetime
+from streamlit_gsheets import GSheetsConnection
 
-# --- 1. SETTINGS & PATHS ---
-master_path = r"C:\Users\dylan\OneDrive - dylan collyge\TheNew LeafLink\MasterLeafLink\MasterLeafLink.xlsm"
-leaf_icon_path = r"C:\Users\dylan\OneDrive - dylan collyge\TheNew LeafLink\GNC LOGO.png"
-photo_folder = r"C:\Users\dylan\OneDrive - dylan collyge\TheNew LeafLink\site_photos"
-
-if not os.path.exists(photo_folder):
-    try:
-        os.makedirs(photo_folder)
-    except:
-        pass
+# --- 1. SETTINGS ---
+# (Local paths removed for Cloud compatibility)
 
 # --- 2. UI CONFIG ---
 st.set_page_config(page_title="GNC | LeafLink", layout="wide", initial_sidebar_state="expanded")
 
 # --- 3. AUTO-CLOSE SIDEBAR LOGIC ---
-# This checks if we need to close the sidebar and injects JavaScript to do it
 if 'close_sidebar' not in st.session_state:
     st.session_state.close_sidebar = False
 
@@ -29,39 +20,39 @@ if st.session_state.close_sidebar:
     components.html(
         """
         <script>
-            // Find the sidebar element
             var sidebar = window.parent.document.querySelector('[data-testid="stSidebar"]');
             if (sidebar) {
-                // Find the collapse button (usually the first button inside the sidebar)
                 var button = sidebar.querySelector('button');
-                if (button) {
-                    button.click();
-                }
+                if (button) { button.click(); }
             }
         </script>
         """,
         height=0, width=0
     )
-    st.session_state.close_sidebar = False # Reset flag
+    st.session_state.close_sidebar = False
 
 # --- 4. HELPER FUNCTIONS ---
 def get_base64_leaf():
-    if os.path.exists(leaf_icon_path):
-        try:
-            with open(leaf_icon_path, "rb") as f:
-                return base64.b64encode(f.read()).decode()
-        except: return None
-    return None
+    # Placeholder for cloud: You can replace this with a URL to an image later
+    return None 
 
 leaf_b64 = get_base64_leaf()
 
-@st.cache_data(ttl=3600)
+# --- MODIFIED: CLOUD DATA LOADER ---
+@st.cache_data(ttl=10) # Checks for updates every 10 seconds
 def load_gnc_data():
-    if not os.path.exists(master_path): return None, {}
     try:
-        df = pd.read_excel(master_path, sheet_name='Inventory_Drive_Around', engine='openpyxl')
+        # Connect to Google Sheets
+        conn = st.connection("gsheets", type=GSheetsConnection)
+        
+        # READ MAIN DATA
+        # Ensure your Google Sheet tab is named exactly 'Inventory_Drive_Around'
+        df = conn.read(worksheet='Inventory_Drive_Around')
+        
+        # Clean Columns
         df.columns = [str(c).strip().upper() for c in df.columns]
         
+        # Ensure required columns exist
         new_cols = ['LOC_SALESNOTE', 'CALIPER', 'SPEC', 'LOC_COMMENTS', 'MATCH_PCT', 'PIC_NOTE', 'PRIME_QTY', 'PHOTO', 'STATUS', 'ITEMCODE']
         for col in new_cols:
             if col not in df.columns:
@@ -69,9 +60,10 @@ def load_gnc_data():
         
         df = df.fillna("").astype(str)
 
+        # READ NOTES (Optional - wrapped in try/except)
         sales_notes_map = {}
         try:
-            notes_df = pd.read_excel(master_path, sheet_name='S1_SalesNotes', engine='openpyxl')
+            notes_df = conn.read(worksheet='S1_SalesNotes')
             notes_df.columns = [str(c).strip().upper() for c in notes_df.columns]
             
             if 'ITEMCODE' in notes_df.columns:
@@ -82,82 +74,30 @@ def load_gnc_data():
                 
                 if note_col:
                     sales_notes_map = notes_df.groupby('ITEMCODE')[note_col].apply(lambda x: list(x.dropna().astype(str))).to_dict()
-        except: pass
+        except: 
+            pass # Fail silently if Notes tab doesn't exist
 
         return df, sales_notes_map
 
     except Exception as e:
-        print(f"Data Load Error: {e}")
+        st.error(f"⚠️ Connection Error: {e}")
         return None, {}
 
 # --- 5. CSS STYLING ---
 st.markdown(f"""
     <style>
-    /* 1. FORCE SIDEBAR STYLE (But allow collapse) */
-    [data-testid="stSidebar"] {{
-        background-color: #0A0A0A !important;
-        border-right: 2px solid #333 !important;
-    }}
-
-    /* 2. CARD STYLING FOR INPUTS */
+    [data-testid="stSidebar"] {{ background-color: #0A0A0A !important; border-right: 2px solid #333 !important; }}
     div[data-testid="stTextInput"] > div > div > input,
     div[data-testid="stSelectbox"] > div > div > div {{
-        background-color: #1E1E1E !important; 
-        color: #E0E0E0 !important; 
-        border: 1px solid #444 !important; 
-        border-radius: 8px !important; 
-        height: 50px !important;
-        text-align: left !important; 
-        padding-left: 15px !important;
-        font-size: 1rem !important;
+        background-color: #1E1E1E !important; color: #E0E0E0 !important; border: 1px solid #444 !important; 
+        border-radius: 8px !important; height: 50px !important;
     }}
-    
-    div[data-testid="stTextInput"] > div > div > input:focus,
-    div[data-testid="stSelectbox"] > div > div > div:focus {{
-        border: 1px solid #006847 !important; 
-    }}
-
-    /* 3. BUTTONS */
     div.stButton > button {{
-        background-color: #2D2D2D !important;
-        color: #FFFFFF !important;
-        border: 1px solid #444 !important;
-        border-radius: 8px !important;
-        height: 50px !important;
-        font-weight: 600 !important;
-        width: 100% !important;
+        background-color: #2D2D2D !important; color: #FFFFFF !important; border: 1px solid #444 !important;
+        border-radius: 8px !important; height: 50px !important; font-weight: 600 !important; width: 100% !important;
     }}
-    
-    div.stButton > button:hover {{
-        border-color: #006847 !important;
-        color: #006847 !important;
-    }}
-
-    div.stButton > button[kind="primary"] {{
-        background-color: #006847 !important;
-        color: #FFFFFF !important;
-        border: none !important;
-    }}
-
-    /* 4. SIDEBAR NAVIGATION BUTTONS */
-    """ + (f"""
-    [data-testid="stSidebar"] div.stButton > button {{
-        background-image: url("data:image/png;base64,{leaf_b64}");
-        background-repeat: no-repeat;
-        background-position: 10px center;
-        background-size: 16px;
-        padding-left: 35px !important;
-        text-align: left !important;
-        background-color: transparent !important;
-        border: none !important;
-        color: #AAA !important;
-    }}
-    [data-testid="stSidebar"] div.stButton > button:hover {{
-        color: #FFF !important;
-        background-color: #1A1A1A !important;
-    }}
-    """ if leaf_b64 else "") + """
-
+    div.stButton > button:hover {{ border-color: #006847 !important; color: #006847 !important; }}
+    div.stButton > button[kind="primary"] {{ background-color: #006847 !important; color: #FFFFFF !important; border: none !important; }}
     h1, h2, h3 {{ color: #006847 !important; }}
     </style>
     """, unsafe_allow_html=True)
@@ -173,29 +113,23 @@ if 'view_mode' not in st.session_state: st.session_state.view_mode = 'pending'
 
 # --- 7. SIDEBAR ---
 with st.sidebar:
-    if leaf_b64:
-        st.markdown(f'<img src="data:image/png;base64,{leaf_b64}" class="sidebar-logo" style="width:80px; display:block; margin:0 auto 20px auto;">', unsafe_allow_html=True)
-    else:
-        st.markdown("<h2 style='text-align:center;'>GNC</h2>", unsafe_allow_html=True)
-    
+    st.markdown("<h2 style='text-align:center;'>GNC</h2>", unsafe_allow_html=True)
     nav_pages = ["OVERVIEW", "DRIVEAROUND", "MYTASKS", "SALESTEAM", "INVENTORYTEAM", "SOC", "SALESINVTRACKING", "WEATHER", "CONTACT"]
     for p in nav_pages:
-        # Check if button is clicked
         if st.button(p, key=f"nav_{p}"):
             st.session_state.page = p
             st.session_state.step = 'variety'
             st.session_state.task_step = 'block'
             st.session_state.sales_stage = 'select_member'
-            st.session_state.close_sidebar = True # TRIGGER CLOSE
+            st.session_state.close_sidebar = True
             st.rerun()
 
 # --- 8. MAIN WORKSPACE ---
 df, sales_notes_map = load_gnc_data()
 
-# Use container to allow proper spacing
 with st.container():
     if df is None:
-        st.error("⚠️ DATA NOT FOUND. Check file path.")
+        st.info("Waiting for connection... (If this persists, check Secrets)")
     else:
         # --- SALES TEAM ---
         if st.session_state.page == "SALESTEAM":
@@ -255,7 +189,7 @@ with st.container():
                         if st.button(label, key=f"loc_{row['LOCATIONCODE']}"):
                             st.session_state.sel_loc = row['LOCATIONCODE']; st.session_state.task_step = 'details'; st.rerun()
 
-                # --- DETAIL STACK ---
+                # --- DETAIL STACK (Where Saving Happens) ---
                 elif st.session_state.task_step == 'details':
                     if st.button("⬅️ BACK"): st.session_state.task_step = 'location'; st.rerun()
                     st.markdown(f"### {st.session_state.sel_block} - {st.session_state.sel_loc}")
@@ -267,22 +201,11 @@ with st.container():
                         uid = f"{row['BLOCKALPHA']}_{row['LOCATIONCODE']}_{idx}"
                         item_code = str(row.get('ITEMCODE', '')).strip()
                         
-                        # "SQUARED UP" CARD LOOK
                         with st.expander(f"{row.get('COMMONNAME')} | {row.get('CONTSIZE')}", expanded=False):
                             
-                            st.markdown("##### 📸 PHOTO")
-                            img_file = st.file_uploader("Upload Image", type=['png', 'jpg', 'jpeg'], key=f"cam_{uid}", label_visibility="collapsed")
+                            st.markdown("##### 📸 PHOTO (Disabled in Cloud Mode)")
+                            # Image logic removed to prevent cloud crashes
                             
-                            if img_file is not None:
-                                ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-                                clean_name = "".join(x for x in row['COMMONNAME'] if x.isalnum())[:10]
-                                filename = f"{row['LOCATIONCODE']}_{clean_name}_{ts}.jpg"
-                                file_path = os.path.join(photo_folder, filename)
-                                with open(file_path, "wb") as f:
-                                    f.write(img_file.getbuffer())
-                                df.at[idx, 'PHOTO'] = file_path
-                                st.success(f"PHOTO SAVED")
-
                             st.markdown("---")
 
                             c1, c2 = st.columns(2)
@@ -315,10 +238,27 @@ with st.container():
                             
                             st.markdown("<br>", unsafe_allow_html=True)
                             
+                            # --- MODIFIED: WRITE BACK TO GOOGLE SHEETS ---
                             if st.button("MARK COMPLETE", key=f"done_{uid}", type="primary"):
-                                df.at[idx, 'STATUS'] = 'COMPLETE'
-                                st.success("✅ TASK COMPLETED")
-                                st.rerun() 
+                                try:
+                                    # 1. Update the in-memory dataframe
+                                    df.at[idx, 'STATUS'] = 'COMPLETE'
+                                    df.at[idx, 'CALIPER'] = caliper
+                                    df.at[idx, 'SPEC'] = spec
+                                    df.at[idx, 'MATCH_PCT'] = match_pct
+                                    df.at[idx, 'PRIME_QTY'] = prime_qty
+                                    df.at[idx, 'LOC_SALESNOTE'] = loc_note
+                                    df.at[idx, 'LOC_COMMENTS'] = comments
+                                    df.at[idx, 'PIC_NOTE'] = pic_note
+
+                                    # 2. Write to Google Sheets
+                                    conn = st.connection("gsheets", type=GSheetsConnection)
+                                    conn.update(worksheet='Inventory_Drive_Around', data=df)
+                                    
+                                    st.success("✅ SAVED TO GOOGLE SHEETS!")
+                                    st.rerun()
+                                except Exception as e:
+                                    st.error(f"Failed to save: {e}")
 
         # --- DRIVE AROUND ---
         elif st.session_state.page == "DRIVEAROUND":
