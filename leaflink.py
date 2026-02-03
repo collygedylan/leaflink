@@ -6,19 +6,21 @@ from concurrent.futures import ThreadPoolExecutor
 # --- 1. SETTINGS & PAGE CONFIG ---
 st.set_page_config(page_title="GNC | LeafLink", layout="wide", initial_sidebar_state="expanded")
 
-# --- 2. FAST CSS STYLING ---
+# --- 2. DARK THEME CSS ---
 st.markdown(f"""
     <style>
+    /* MAIN BACKGROUNDS */
+    .stApp {{ background-color: #0e1117; }}
     [data-testid="stSidebar"] {{ background-color: #0A0A0A !important; border-right: 2px solid #333 !important; }}
     
-    /* Optimize input rendering */
+    /* INPUTS & DROPDOWNS */
     div[data-testid="stTextInput"] > div > div > input,
     div[data-testid="stSelectbox"] > div > div > div {{
         background-color: #1E1E1E !important; color: #E0E0E0 !important; border: 1px solid #444 !important; 
         border-radius: 8px !important; height: 50px !important;
     }}
     
-    /* Hardware accelerated buttons */
+    /* BUTTONS */
     div.stButton > button {{
         background-color: #2D2D2D !important; color: #FFFFFF !important; border: 1px solid #444 !important;
         border-radius: 8px !important; height: 50px !important; font-weight: 600 !important; width: 100% !important;
@@ -27,21 +29,56 @@ st.markdown(f"""
     div.stButton > button:active {{ transform: scale(0.98); }}
     div.stButton > button:hover {{ border-color: #006847 !important; color: #006847 !important; }}
     div.stButton > button[kind="primary"] {{ background-color: #006847 !important; color: #FFFFFF !important; border: none !important; }}
+    
+    /* TEXT COLORS */
     h1, h2, h3 {{ color: #006847 !important; }}
     
-    /* ✅ FIXED: SECONDARY HEADER COLORS */
-    .sec-header {{
-        background-color: #262730;
-        color: #FFFFFF !important; /* Sets the values (e.g., '868') to WHITE */
-        padding: 10px;
-        border-radius: 5px;
-        border-left: 4px solid #006847;
-        margin-bottom: 15px;
-        font-size: 0.9rem;
+    /* ✅ NEW DARK CARD COMPONENT */
+    .task-card {{
+        background-color: #1E1E1E;
+        border-left: 6px solid #006847; /* THICK GREEN ACCENT */
+        padding: 15px;
+        margin-bottom: 8px;
+        border-radius: 8px;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.3);
     }}
-    /* Sets the bold labels (e.g., 'PRIORITY:') to BRAND GREEN */
-    .sec-header b {{
-        color: #006847 !important; 
+    
+    /* THE TITLE (Name, Size) - NOW GREEN */
+    .card-title {{
+        font-size: 1.2rem;
+        font-weight: 900;
+        color: #006847; /* BRAND GREEN TEXT */
+        margin-bottom: 8px;
+        letter-spacing: 0.5px;
+    }}
+    
+    /* THE INFO GRID (Priority, PTR, etc) */
+    .card-stats {{
+        display: flex;
+        flex-wrap: wrap;
+        gap: 15px;
+        font-size: 0.95rem;
+        color: #FFFFFF; /* White values */
+        background-color: #25262B;
+        padding: 10px;
+        border-radius: 6px;
+    }}
+    
+    /* LABELS INSIDE THE GRID */
+    .stat-label {{
+        color: #006847; /* GREEN LABELS */
+        font-weight: bold;
+        font-size: 0.85rem;
+        text-transform: uppercase;
+        margin-right: 4px;
+    }}
+    
+    /* REMOVE DEFAULT EXPANDER BORDER to blend it in */
+    div[data-testid="stExpander"] {{
+        border: none !important;
+        box-shadow: none !important;
+        background-color: transparent !important;
+        margin-top: -5px; /* Pull it closer to the card */
     }}
     </style>
     """, unsafe_allow_html=True)
@@ -219,7 +256,7 @@ with st.container():
                         if st.button(label, key=f"loc_{row['LOCATIONCODE']}"):
                             st.session_state.sel_loc = row['LOCATIONCODE']; st.session_state.task_step = 'details'; st.rerun()
 
-                # --- DETAIL STACK (MODIFIED UI) ---
+                # --- DETAIL STACK (THE DARK CARD) ---
                 elif st.session_state.task_step == 'details':
                     if st.button("⬅️ BACK"): st.session_state.task_step = 'location'; st.rerun()
                     st.markdown(f"### {st.session_state.sel_block} - {st.session_state.sel_loc}")
@@ -231,20 +268,26 @@ with st.container():
                         uid = f"{row['BLOCKALPHA']}_{row['LOCATIONCODE']}_{idx}"
                         item_code = str(row.get('ITEMCODE', '')).strip()
                         
-                        header_text = f"{row.get('COMMONNAME','')} | {row.get('CONTSIZE','')} | {row.get('LOTCODE','')}"
-                        
-                        with st.expander(header_text, expanded=False):
-                            
-                            sec_info = f"""
-                            <div class='sec-header'>
-                                <b>PRIORITY:</b> {row.get('PRIORITY','')} <br>
-                                <b>NOTE:</b> {row.get('CURRENT_SALESNOTE','')} <br>
-                                <b>PTR:</b> {row.get('PTRAVAILABLE','')} &nbsp;|&nbsp; <b>LTS:</b> {row.get('S_LTS','')}
+                        # --- 1. THE DARK CARD (VISIBLE INFO) ---
+                        card_html = f"""
+                        <div class="task-card">
+                            <div class="card-title">
+                                {row.get('COMMONNAME','')} | {row.get('CONTSIZE','')} | {row.get('LOTCODE','')}
                             </div>
-                            """
-                            st.markdown(sec_info, unsafe_allow_html=True)
-
-                            show_full_details = st.toggle("📋 SHOW FULL FILE DATA", key=f"tgl_{uid}")
+                            <div class="card-stats">
+                                <div><span class="stat-label">PRIORITY:</span>{row.get('PRIORITY','')}</div>
+                                <div><span class="stat-label">PTR:</span>{row.get('PTRAVAILABLE','')}</div>
+                                <div><span class="stat-label">LTS:</span>{row.get('S_LTS','')}</div>
+                                <div style="width:100%;"><span class="stat-label">NOTE:</span>{row.get('CURRENT_SALESNOTE','')}</div>
+                            </div>
+                        </div>
+                        """
+                        st.markdown(card_html, unsafe_allow_html=True)
+                        
+                        # --- 2. THE EDIT BUTTON (EXPANDER) ---
+                        with st.expander("✏️ EDIT DETAILS / INPUT DATA", expanded=False):
+                            
+                            show_full_details = st.toggle("📋 SHOW ALL FILE COLUMNS", key=f"tgl_{uid}")
                             
                             if show_full_details:
                                 st.markdown("#### 📂 FULL FILE DATA")
